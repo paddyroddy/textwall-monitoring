@@ -51,7 +51,7 @@ df['string'] = df['string'].str.replace(
 df['string'] = df['string'].str.replace('phas|spce', '')
 
 correct_format = df['string'].str.match(
-    r'\d{8}(\s*,\s*|\s+)\d{4}(\s*,\s*|\s+)[\w\d\$]{4,}')
+    r'\d{8}(\s*,\s*|\s+)\d{4}(\s*,\s*|\s+)[\w\d\$]{4,5}')
 false_df = df[~correct_format]
 df = df[correct_format]
 
