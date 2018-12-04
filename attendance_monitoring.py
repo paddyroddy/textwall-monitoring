@@ -61,11 +61,21 @@ df['string'] = df['string'].str.replace(',', ' ')
 
 # split first column into three
 df = pd.concat([df['string'].str.split(expand=True), df['datetime']], axis=1)
-false_df = pd.concat([false_df['string'].str.split(
-    expand=True), false_df['datetime']], axis=1)
+false_df = pd.concat([false_df['string'].str.split(expand=True), false_df['datetime']], axis=1)
 
 # set names of columns
 df.columns = ['student', 'course', 'phrase', 'datetime']
+false_df.columns = ['student', 'course', 'phrase', 'datetime']
+
+# find difference between first textwall and current
+difference = df['datetime'] - df.groupby(['course', 'phrase'])['datetime'].transform('min')
+
+# create easy to read collumns of difference
+df['delta_sec'] = difference.dt.seconds
+
+# sort by course/phrase/datetime
+df.sort_values(by=['course', 'phrase', 'datetime'], inplace=True)
+false_df.sort_values(by=['course', 'phrase', 'datetime'], inplace=True)
 
 filename_noext = os.path.splitext(csv)[0]
 output = filename_noext + '_output.csv'
