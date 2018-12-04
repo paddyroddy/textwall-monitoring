@@ -1,8 +1,14 @@
 import pandas as pd
 import os
+from argparse import ArgumentParser
+
+# input
+parser = ArgumentParser(description='Sort textwall output')
+parser.add_argument('csv_file', metavar='csv_file', type=str, help='csv file to process')
+args = parser.parse_args()
+csv = args.csv_file
 
 # read in csv
-csv = 'textwall_sample.csv'
 df = pd.read_csv(csv, header=None, names=[
                  'string', 'n/a', 'date', 'time'], parse_dates={'datetime': ['date', 'time']})
 
@@ -62,6 +68,9 @@ false_df = pd.concat([false_df['string'].str.split(
 df.columns = ['student', 'course', 'phrase', 'datetime']
 
 filename_noext = os.path.splitext(csv)[0]
-df.to_csv(filename_noext + '_output.csv')
-false_df.to_csv(filename_noext + '_errors.csv')
-print(df)
+output = filename_noext + '_output.csv'
+df.to_csv(output)
+errors = filename_noext + '_errors.csv'
+false_df.to_csv(errors)
+print('Output:', output)
+print('Errors:', errors)
