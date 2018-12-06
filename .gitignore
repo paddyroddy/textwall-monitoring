@@ -1,2 +1,5 @@
 *.csv
 .vscode/
+*.egg-info/
+dist/
+build/
