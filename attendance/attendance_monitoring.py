@@ -233,4 +233,4 @@ def process(csv_textwall, csv_student, csv_module, starting_monday, number_weeks
 
 if __name__ == '__main__':
     process('textwall_sample.csv', 'student_numbers.csv',
-            'module_codes.csv', '2018-08-13', 11)
+            'module_codes.csv', '2018-10-01', 11)
