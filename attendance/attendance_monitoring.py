@@ -17,17 +17,35 @@ class AttendanceMonitoring:
 
     def sort_textwall_output(self):
         # read in csv
-        df = pd.read_csv(self.csv_textwall, header=None, names=[
-                         'string', 'n/a', 'date', 'time'], parse_dates={'datetime': ['date', 'time']})
+        # not using parse_dates because sometimes
+        # the format of the data doesn't work
+        df = pd.read_csv(self.csv_textwall, names=[
+                         'string', 'n/a', 'date', 'time'])
 
         # remove email column
         df = df.drop('n/a', axis=1)
+
+        # clean up date column
+        df['date'] = df['date'].str.replace('=', '')
+        df['date'] = df['date'].str.replace('"', '')
+
+        # clean up time column
+        df['time'] = df['time'].str.replace('=', '')
+        df['time'] = df['time'].str.replace('"', '')
+
+        # create datetime column and drop date and time columns
+        df['datetime'] = pd.to_datetime(df['date'] + ' ' + df['time'])
+        df = df.drop('date', axis=1)
+        df = df.drop('time', axis=1)
 
         # set string all lowercase for ease
         df['string'] = df['string'].str.lower()
 
         # replace ? with ,
         df['string'] = df['string'].str.replace('?', ',')
+
+        # replace . with ,
+        df['string'] = df['string'].str.replace('.', ',')
 
         # remove =
         df['string'] = df['string'].str.replace('=', '')
@@ -38,28 +56,36 @@ class AttendanceMonitoring:
         # remove leading _
         df['string'] = df['string'].str.lstrip('_')
 
+        # remove leading :
+        df['string'] = df['string'].str.lstrip(':')
+
         # remove leading ,
         df['string'] = df['string'].str.lstrip(',')
 
         # remove leading whitespace
         df['string'] = df['string'].str.lstrip()
 
+        # remove pattern of 'a 12345678,' i.e. startin with a letter
+        df['string'] = df['string'].str.replace(r'^\S\s+', '', regex=True)
+
         # remove obscure ending beginning with 'boundary'
         df['string'] = df['string'].str.replace('boundary----', '')
 
         # remove obscure ending beginning with 'nextpart'
         df['string'] = df['string'].str.replace(
-            r'_nextpart_[\d\w]{8}_[\d\w]{8}_[\d\w]{8}', '', regex=True)
+            r'_nextpart_\S+_\S+_\S+', '', regex=True)
 
         # remove obscure ending beginning with 'part
         df['string'] = df['string'].str.replace(
-            r'_part_\d{8}_\d{10}.\d{13}', '', regex=True)
+            r'_part_\d+_\d+,\d+', '', regex=True)
 
         # remove erroneous 'phas' or 'spce' from string
-        df['string'] = df['string'].str.replace('phas|spce', '')
+        df['string'] = df['string'].str.replace('phas|pha|phs|pgas|spce', '')
 
+        # correct_format = df['string'].str.match(
+        #     r'\d{8}(\s*,\s*|\s+)(0\d{1,4}|[^0]\d{0,3})(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*]{3,5}')
         correct_format = df['string'].str.match(
-            r'\d{8}(\s*,\s*|\s+)\d{4}(\s*,\s*|\s+)[\w\d\$]{4,5}')
+            r'^\d{8}(\s*,\s*|\s+)(0\d{1,4}|[^0]\d{0,3})(\s*,\s*|\s+)\S{3,}$')
         false_df = df[~correct_format]
         df = df[correct_format]
 
@@ -232,5 +258,7 @@ def process(csv_textwall, csv_student, csv_module, starting_monday, number_weeks
 
 
 if __name__ == '__main__':
-    process('textwall_sample.csv', 'student_numbers.csv',
-            'module_codes.csv', '2018-10-01', 11)
+    # process('textwall_sample.csv', 'student_numbers.csv',
+    #         'module_codes.csv', '2018-10-01', 52)
+    process('textwall_2018-19_week1-20.csv', 'student_numbers.csv',
+            'module_codes.csv', '2018-10-01', 52)
