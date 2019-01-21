@@ -85,44 +85,56 @@ class AttendanceMonitoring:
         # correct_format = df['string'].str.match(
         #     r'\d{8}(\s*,\s*|\s+)(0\d{1,4}|[^0]\d{0,3})(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*]{3,5}')
         correct_format = df['string'].str.match(
-            r'^\d{8}(\s*,\s*|\s+)(0\d{1,4}|[^0]\d{0,3})(\s*,\s*|\s+)\S{3,}$')
+            r'^\d{8}(\s*,\s*|\s+)(0\d{1,5}|[^0]\d{0,3})(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*\&\'\/\,]{3,}\s*$')
         false_df = df[~correct_format]
-        df = df[correct_format]
+        correct_df = df[correct_format]
 
         # replace comma with space
         false_df['string'] = false_df['string'].str.replace(',', ' ')
-        df['string'] = df['string'].str.replace(',', ' ')
+        correct_df['string'] = correct_df['string'].str.replace(',', ' ')
 
         # split first column into three
-        df = pd.concat([df['string'].str.split(
-            expand=True), df['datetime']], axis=1)
+        correct_df = pd.concat([correct_df['string'].str.split(
+            expand=True), correct_df['datetime']], axis=1)
         false_df = pd.concat([false_df['string'].str.split(
             expand=True), false_df['datetime']], axis=1)
 
+        last_col = 3
+        # check if there is a largely None column
+        if last_col + 1 == len(correct_df.columns):
+            new_false_df, new_correct_df = false_df, correct_df
+        else:
+            # test if final column is not None
+            failures = correct_df[~correct_df[last_col].isnull()]
+            # add failures to false_df
+            new_false_df = pd.concat([false_df, failures])
+            # remove failures from correct_df
+            new_correct_df = correct_df[correct_df[last_col].isnull()]
+            # drop redundant column
+            new_correct_df = new_correct_df.drop(last_col, axis=1)
+
         # set names of columns
-        df.columns = ['student', 'module', 'phrase', 'datetime']
-        false_df.columns = ['student', 'module', 'phrase', 'datetime']
+        new_correct_df.columns = ['student', 'module', 'phrase', 'datetime']
 
         # find difference between first textwall and current
-        difference = df['datetime'] - \
-            df.groupby(['module', 'phrase'])['datetime'].transform('min')
+        difference = new_correct_df['datetime'] - \
+            new_correct_df.groupby(['module', 'phrase'])['datetime'].transform('min')
 
         # create easy to read collumns of difference
-        df['delta_sec'] = difference.dt.seconds
+        new_correct_df['delta_sec'] = difference.dt.seconds
 
         # sort by module/phrase/datetime
-        df.sort_values(by=['module', 'phrase', 'datetime'], inplace=True)
-        false_df.sort_values(by=['module', 'phrase', 'datetime'], inplace=True)
+        new_correct_df.sort_values(by=['module', 'phrase', 'datetime'], inplace=True)
 
         # save outputs and errors
         output = self.filename_noext + '_output.csv'
-        df.to_csv(output)
+        new_correct_df.to_csv(output)
         print('Full valid cleaned textwall output: {0}'.format(output))
         errors = self.filename_noext + '_errors.csv'
-        false_df.to_csv(errors)
+        new_false_df.to_csv(errors)
         print('Failed textwall entries: {0}'.format(errors))
 
-        return df, false_df
+        return new_correct_df, new_false_df
 
     def calculate_weeks(self):
         # starting_monday in format of '26-12-2018'
@@ -259,6 +271,6 @@ def process(csv_textwall, csv_student, csv_module, starting_monday, number_weeks
 
 if __name__ == '__main__':
     # process('textwall_sample.csv', 'student_numbers.csv',
-    #         'module_codes.csv', '2018-10-01', 52)
+    #         'module_codes.csv', '2018-08-27', 52)
     process('textwall_2018-19_week1-20.csv', 'student_numbers.csv',
-            'module_codes.csv', '2018-10-01', 52)
+            'module_codes.csv', '2018-08-27', 52)
