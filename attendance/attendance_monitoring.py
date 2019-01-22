@@ -5,13 +5,12 @@ import numpy as np
 
 
 class AttendanceMonitoring:
-    def __init__(self, csv_textwall, csv_student, csv_module, starting_monday, number_weeks):
+    def __init__(self, csv_textwall, csv_student, csv_module, starting_monday):
         self.csv_textwall = csv_textwall
         self.csv_student = csv_student
         self.csv_module = csv_module
         self.starting_monday = starting_monday
-        self.number_weeks = number_weeks
-        self.filename_noext = os.path.splitext(self.csv_textwall)[0]
+        self.number_weeks = 52  # i.e. a year
         self.weeks = self.calculate_weeks()
         self.df_textwall = self.split_textwall_weeks()
 
@@ -85,62 +84,72 @@ class AttendanceMonitoring:
         # correct_format = df['string'].str.match(
         #     r'\d{8}(\s*,\s*|\s+)(0\d{1,4}|[^0]\d{0,3})(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*]{3,5}')
         correct_format = df['string'].str.match(
-            r'^\d{8}(\s*,\s*|\s+)(0\d{1,5}|[^0]\d{0,3})(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*\&\'\/\,]{3,}\s*$')
-        false_df = df[~correct_format]
-        correct_df = df[correct_format]
+            r'^\d{8}(\s*,\s*|\s+)(0\d{1,5}|^[1-9]\d{0,3})(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*\&\'\/\,]{3,}\s*$')
+        false_df = df[~correct_format].copy()
+        correct_df = df[correct_format].copy()
 
         # replace comma with space
         false_df['string'] = false_df['string'].str.replace(',', ' ')
         correct_df['string'] = correct_df['string'].str.replace(',', ' ')
 
         # split first column into three
-        correct_df = pd.concat([correct_df['string'].str.split(
-            expand=True), correct_df['datetime']], axis=1)
-        false_df = pd.concat([false_df['string'].str.split(
-            expand=True), false_df['datetime']], axis=1)
+        correct_df = pd.concat(
+            [correct_df['datetime'], correct_df['string'].str.split(expand=True)], axis=1)
+        false_df = pd.concat(
+            [false_df['datetime'], false_df['string'].str.split(expand=True)], axis=1)
 
-        last_col = 3
-        # check if there is a largely None column
-        if last_col + 1 == len(correct_df.columns):
-            new_false_df, new_correct_df = false_df, correct_df
-        else:
+        # check if there is a largely None column (based on input csv)
+        if len(correct_df.columns) == 5:
             # test if final column is not None
-            failures = correct_df[~correct_df[last_col].isnull()]
+            indices = correct_df.iloc[:, -1].isnull()
+            failures = correct_df[~indices]
             # add failures to false_df
-            new_false_df = pd.concat([false_df, failures])
+            false_df = pd.concat([false_df, failures], sort=False)
             # remove failures from correct_df
-            new_correct_df = correct_df[correct_df[last_col].isnull()]
+            correct_df = correct_df[indices]
             # drop redundant column
-            new_correct_df = new_correct_df.drop(last_col, axis=1)
+            correct_df = correct_df[correct_df.columns[:-1]]
 
         # set names of columns
-        new_correct_df.columns = ['student', 'module', 'phrase', 'datetime']
+        col_names = ['datetime', 'student', 'module', 'phrase']
+        correct_df.columns = col_names
+        columns = {i: col_names[i + 1] for i in range(len(col_names) - 1)}
+        false_df.rename(index=str, columns=columns, inplace=True)
+
+        # make modules an int
+        correct_df['module'] = pd.to_numeric(correct_df['module'])
+
+        # put module codes equal to zero as failures
+        indices = correct_df['module'] == 0
+        zero_failures = correct_df[indices]
+        # add failures to false_df
+        false_df = pd.concat([false_df, zero_failures], sort=False)
+        # remove failures from correct_df
+        correct_df = correct_df[~indices]
 
         # find difference between first textwall and current
-        difference = new_correct_df['datetime'] - \
-            new_correct_df.groupby(['module', 'phrase'])['datetime'].transform('min')
+        difference = correct_df['datetime'] - \
+            correct_df.groupby(['module', 'phrase'])[
+            'datetime'].transform('min')
 
         # create easy to read collumns of difference
-        new_correct_df['delta_sec'] = difference.dt.seconds
+        correct_df['delta_sec'] = difference.dt.seconds
 
         # sort by module/phrase/datetime
-        new_correct_df.sort_values(by=['module', 'phrase', 'datetime'], inplace=True)
+        correct_df.sort_values(
+            by=['module', 'phrase', 'datetime'], inplace=True)
 
         # save outputs and errors
-        output = self.filename_noext + '_output.csv'
-        new_correct_df.to_csv(output)
-        print('Full valid cleaned textwall output: {0}'.format(output))
-        errors = self.filename_noext + '_errors.csv'
-        new_false_df.to_csv(errors)
-        print('Failed textwall entries: {0}'.format(errors))
+        self.save_csv(correct_df, 'output', 'Full valid cleaned textwall output')
+        self.save_csv(false_df, 'errors', 'Failed textwall entries')
 
-        return new_correct_df, new_false_df
+        return correct_df, false_df
 
     def calculate_weeks(self):
         # starting_monday in format of '26-12-2018'
         monday = pd.Timestamp(self.starting_monday)
         week = dt.timedelta(days=7)
-        mondays = [monday + x * week for x in range(12)]
+        mondays = [monday + x * week for x in range(self.number_weeks + 1)]
         weeks = {k + 1: [mondays[k], mondays[k + 1]]
                  for k, v in enumerate(mondays[:-1])}
         return weeks
@@ -151,7 +160,7 @@ class AttendanceMonitoring:
                 return num
 
     def split_textwall_weeks(self):
-        # starting_monday in format of '26-12-2018'
+        # starting_monday in format of '2018-08-27'
         df, _ = self.sort_textwall_output()
         df['week'] = df.apply(lambda row: self.week_number(row), axis=1)
         return df
@@ -160,20 +169,17 @@ class AttendanceMonitoring:
         # get all valid output from textwall
         df = self.df_textwall
 
+        # read in csv_module - list of modules
+        df_module = pd.read_csv(self.csv_module, dtype=int)
+
+        # calculate the union on module codes
+        df_merged = df_module.merge(df, how='right')
+
         # create copy column with different name for grouping
-        df['delta_sec_copy'] = df['delta_sec']
-
-        # read in csv_student and get headings
-        df_student = pd.read_csv(self.csv_student, dtype=str)
-        csv_headings = df_student.columns.values
-
-        # column names
-        col_names = [('week' + str(i + 1) + '_count', 'week' +
-                      str(i + 1) + '_mean') for i in range(self.number_weeks)]
-        cols = [e for l in col_names for e in l]
+        df_merged['delta_sec_copy'] = df_merged['delta_sec']
 
         # calculate count and mean grouped by student number and week
-        df_textwall_grouped = df.groupby(['student', 'week']).agg({'delta_sec': 'size', 'delta_sec_copy': 'mean'}).rename(
+        df_textwall_grouped = df_merged.groupby(['student', 'week']).agg({'delta_sec': 'size', 'delta_sec_copy': 'mean'}).rename(
             columns={'delta_sec': 'count', 'delta_sec_copy': 'mean'}).reset_index()
 
         # populate df_output with values frpom df_textwall_year_group https://stackoverflow.com/questions/53961242/how-to-merge-two-pandas-dataframes-based-on-a-value-in-one-row-and-with-differen
@@ -183,51 +189,72 @@ class AttendanceMonitoring:
         # modify the column names
         s.columns = s.columns.map('week{0[1]}_{0[0]}'.format)
 
+        # column names
+        col_names = [('week' + str(i + 1) + '_count', 'week' +
+                      str(i + 1) + '_mean') for i in range(self.number_weeks)]
+        cols = [e for l in col_names for e in l]
+
+        # read in csv_student and get headings
+        df_student = pd.read_csv(self.csv_student, dtype=str)
+        csv_headings = df_student.columns.values
+
         # loop through each heading
         for year_group in csv_headings:
             # get respective year group and remove trailing entries
             student_numbers = df_student[year_group].dropna()
 
-            # num of rows in output
-            num_rows = len(student_numbers)
+            # create table
+            self.year_group_table(year_group, cols, s, student_numbers)
 
-            # initialise df of zeros
-            df_output = pd.DataFrame(0, index=np.arange(
-                num_rows), columns=['student'] + cols)
+        # find all students not in df_student but in s
+        all_csv_values = df_student.values.flatten()
+        student_array = all_csv_values[~pd.isna(all_csv_values)]
+        df_contained = pd.DataFrame(student_array, columns=['student'])
+        df_missing = df_textwall_grouped[~df_textwall_grouped['student'].isin(
+            df_contained['student'])].dropna()
 
-            # set first column as student numbers
-            df_output['student'] = student_numbers
+        # save missing students in table
+        self.year_group_table('missing_students', cols, s, df_missing)
 
-            # perform update
-            df_output = df_output.set_index('student')
-            df_output.update(s)
+    def year_group_table(self, heading, column_names, s, student_numbers):
+        # num of rows in output
+        num_rows = len(student_numbers)
 
-            # change all _count columns to int rather than float
-            df_output[df_output.columns[::2]
-                      ] = df_output[df_output.columns[::2]].astype(int)
+        # initialise df of zeros
+        df_output = pd.DataFrame(0, index=np.arange(
+            num_rows), columns=['student'] + column_names)
 
-            # round all _mean columns to an int
-            df_output[df_output.columns[1::2]
-                      ] = df_output[df_output.columns[1::2]].round(0).astype(int)
+        # set first column as student numbers
+        df_output['student'] = student_numbers
 
-            # save each year group to a csv
-            filename = self.filename_noext + '_' + year_group + '.csv'
-            df_output.to_csv(filename)
-            print('Sorted by year group: {0}'.format(filename))
+        # perform update
+        df_output = df_output.set_index('student')
+        df_output.update(s)
+
+        # change all _count columns to int rather than float
+        df_output[df_output.columns[::2]
+                  ] = df_output[df_output.columns[::2]].astype(int)
+
+        # round all _mean columns to an int
+        df_output[df_output.columns[1::2]
+                  ] = df_output[df_output.columns[1::2]].round(0).astype(int)
+
+        # save each year group to a csv
+        self.save_csv(df_output, heading, 'Sorted by year group')
 
     def create_module_table(self):
         # get all valid output from textwall
         df = self.df_textwall
 
-        # read in csv_module and get headings
-        df_module = pd.read_csv(self.csv_module, dtype=str)
+        # read in csv_module - list of modules
+        df_module = pd.read_csv(self.csv_module, dtype=int)
+        module_codes = df_module['module']
 
-        # column names
-        cols = ['week' + str(i + 1) +
-                '_count' for i in range(self.number_weeks)]
+        # calculate the union on module codes
+        df_merged = df_module.merge(df, how='right')
 
         # calculate count and mean grouped by student number and week
-        df_textwall_grouped = df.groupby(['module', 'week']).agg(
+        df_textwall_grouped = df_merged.groupby(['module', 'week']).agg(
             {'delta_sec': 'size'}).rename(columns={'delta_sec': 'count'}).reset_index()
 
         # populate df_output with values frpom df_textwall_year_group https://stackoverflow.com/questions/53961242/how-to-merge-two-pandas-dataframes-based-on-a-value-in-one-row-and-with-differen
@@ -237,13 +264,12 @@ class AttendanceMonitoring:
         # modify the column names
         s.columns = s.columns.map('week{0}_count'.format)
 
-        # calculate the union of module codes
-        df_merged = df_module.merge(
-            df_textwall_grouped, how='outer', sort=True)
-        module_codes = df_merged['module']
-
         # num of rows in output
         num_rows = len(module_codes)
+
+        # column names
+        cols = ['week' + str(i + 1) +
+                '_count' for i in range(self.number_weeks)]
 
         # initialise df of zeros
         df_output = pd.DataFrame(0, index=np.arange(
@@ -257,20 +283,25 @@ class AttendanceMonitoring:
         df_output.update(s)
 
         # save each year group to a csv
-        filename = self.filename_noext + '_modules.csv'
-        df_output.to_csv(filename)
-        print('Sorted by module codes: {0}'.format(filename))
+        self.save_csv(df_output, 'modules', 'Sorted by module codes')
+
+    def save_csv(self, dataframe, ending, print_message):
+        filename_no_folder = os.path.basename(self.csv_textwall)
+        filename_no_extension = os.path.splitext(filename_no_folder)[0]
+        filename = filename_no_extension + '_' + ending + '.csv'
+        dataframe.to_csv(filename)
+        print(print_message + ': {0}'.format(filename))
 
 
-def process(csv_textwall, csv_student, csv_module, starting_monday, number_weeks):
+def process(csv_textwall, csv_student, csv_module, starting_monday):
     am = AttendanceMonitoring(
-        csv_textwall, csv_student, csv_module, starting_monday, number_weeks)
+        csv_textwall, csv_student, csv_module, starting_monday)
     am.create_yeargroup_table()
     am.create_module_table()
 
 
 if __name__ == '__main__':
     # process('textwall_sample.csv', 'student_numbers.csv',
-    #         'module_codes.csv', '2018-08-27', 52)
+    #         'module_codes.csv', '2018-08-27')
     process('textwall_2018-19_week1-20.csv', 'student_numbers.csv',
-            'module_codes.csv', '2018-08-27', 52)
+            'module_codes.csv', '2018-08-27')

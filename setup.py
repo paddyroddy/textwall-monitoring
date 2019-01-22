@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='Textwall Monitoring',
-    version='0.2.0',
+    version='0.3.0',
     description='Process Given Texwall CSV Output',
     author='Patrick Roddy',
     author_email='patrickjamesroddy@gmail.com',

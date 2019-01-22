@@ -8,10 +8,9 @@ def main():
     parser.add_argument('csv_textwall', metavar='csv_textwall', type=str, help='textwall output')
     parser.add_argument('csv_student', metavar='csv_student', type=str, help='students by year group')
     parser.add_argument('csv_module', metavar='csv_module', type=str, help='module codes')
-    parser.add_argument('starting_monday', metavar='starting_monday', type=valid_date, help='starting monday of term - format YYYY-MM-DD')
-    parser.add_argument('number_weeks', metavar='number_weeks', type=int, nargs='?', default=11, help='number of weeks to be considered (defaults to 11)')
+    parser.add_argument('starting_monday', metavar='starting_monday', type=valid_date, nargs='?', default='2018-08-27', help='starting monday of the year - format YYYY-MM-DD (defaults to 2018-08-27)')
     args = parser.parse_args()
-    process(args.csv_textwall, args.csv_student, args.csv_module, args.starting_monday, args.number_weeks)
+    process(args.csv_textwall, args.csv_student, args.csv_module, args.starting_monday)
 
 
 def valid_date(s):
