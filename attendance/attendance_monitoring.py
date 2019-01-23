@@ -22,7 +22,7 @@ class AttendanceMonitoring:
                          'string', 'n/a', 'date', 'time'])
 
         # remove email column
-        df = df.drop('n/a', axis=1)
+        df.drop('n/a', axis=1, inplace=True)
 
         # clean up date column
         df['date'] = df['date'].str.replace('=', '')
@@ -116,34 +116,57 @@ class AttendanceMonitoring:
         columns = {i: col_names[i + 1] for i in range(len(col_names) - 1)}
         false_df.rename(index=str, columns=columns, inplace=True)
 
-        # make modules an int
-        correct_df['module'] = pd.to_numeric(correct_df['module'])
+        # make modules an int in new column
+        correct_df['int_module'] = pd.to_numeric(correct_df['module'], downcast='integer')
 
         # put module codes equal to zero as failures
-        indices = correct_df['module'] == 0
-        zero_failures = correct_df[indices]
+        indices = correct_df['int_module'] == 0
+        zero_failures = correct_df[indices].copy()
+        # remove int_module column
+        zero_failures.drop('int_module', axis=1, inplace=True)
         # add failures to false_df
         false_df = pd.concat([false_df, zero_failures], sort=False)
         # remove failures from correct_df
         correct_df = correct_df[~indices]
 
+        # read in csv_module - list of modules
+        df_module = pd.read_csv(self.csv_module, dtype=int)
+
+        # only keep valid module codes
+        cols_to_use = correct_df.columns.difference(df_module.columns)
+        df_merged = df_module.merge(correct_df, how='outer', left_on='module', right_on='int_module', indicator=True)
+
+        # adjust names of columns
+        df_merged.drop('module_x', axis=1, inplace=True)
+        df_merged.rename(index=str, columns={'module_y': 'module'}, inplace=True)
+
+        # add invalid module codes to false_df
+        invalid_modules = df_merged.query('_merge == "right_only"').copy()
+        invalid_modules.drop(['int_module', '_merge'], axis=1, inplace=True)
+        false_df = pd.concat([false_df, invalid_modules], sort=False)
+
+        # remove invalid modules and reformat columns
+        df_valid_modules = df_merged.query('_merge == "both"').copy()
+        df_valid_modules.drop(['module', '_merge'], axis=1, inplace=True)
+        df_valid_modules.rename(index=str, columns={'int_module': 'module'}, inplace=True)
+
         # find difference between first textwall and current
-        difference = correct_df['datetime'] - \
-            correct_df.groupby(['module', 'phrase'])[
+        difference = df_valid_modules['datetime'] - \
+            df_valid_modules.groupby(['module', 'phrase'])[
             'datetime'].transform('min')
 
         # create easy to read collumns of difference
-        correct_df['delta_sec'] = difference.dt.seconds
+        df_valid_modules['delta_sec'] = difference.dt.seconds
 
         # sort by module/phrase/datetime
-        correct_df.sort_values(
+        df_valid_modules.sort_values(
             by=['module', 'phrase', 'datetime'], inplace=True)
 
         # save outputs and errors
-        self.save_csv(correct_df, 'output', 'Full valid cleaned textwall output')
+        self.save_csv(df_valid_modules, 'output', 'Full valid cleaned textwall output')
         self.save_csv(false_df, 'errors', 'Failed textwall entries')
 
-        return correct_df, false_df
+        return df_valid_modules, false_df
 
     def calculate_weeks(self):
         # starting_monday in format of '26-12-2018'
@@ -169,17 +192,11 @@ class AttendanceMonitoring:
         # get all valid output from textwall
         df = self.df_textwall
 
-        # read in csv_module - list of modules
-        df_module = pd.read_csv(self.csv_module, dtype=int)
-
-        # calculate the union on module codes
-        df_merged = df_module.merge(df, how='right')
-
         # create copy column with different name for grouping
-        df_merged['delta_sec_copy'] = df_merged['delta_sec']
+        df['delta_sec_copy'] = df['delta_sec']
 
         # calculate count and mean grouped by student number and week
-        df_textwall_grouped = df_merged.groupby(['student', 'week']).agg({'delta_sec': 'size', 'delta_sec_copy': 'mean'}).rename(
+        df_textwall_grouped = df.groupby(['student', 'week']).agg({'delta_sec': 'size', 'delta_sec_copy': 'mean'}).rename(
             columns={'delta_sec': 'count', 'delta_sec_copy': 'mean'}).reset_index()
 
         # populate df_output with values frpom df_textwall_year_group https://stackoverflow.com/questions/53961242/how-to-merge-two-pandas-dataframes-based-on-a-value-in-one-row-and-with-differen
@@ -250,11 +267,8 @@ class AttendanceMonitoring:
         df_module = pd.read_csv(self.csv_module, dtype=int)
         module_codes = df_module['module']
 
-        # calculate the union on module codes
-        df_merged = df_module.merge(df, how='right')
-
         # calculate count and mean grouped by student number and week
-        df_textwall_grouped = df_merged.groupby(['module', 'week']).agg(
+        df_textwall_grouped = df.groupby(['module', 'week']).agg(
             {'delta_sec': 'size'}).rename(columns={'delta_sec': 'count'}).reset_index()
 
         # populate df_output with values frpom df_textwall_year_group https://stackoverflow.com/questions/53961242/how-to-merge-two-pandas-dataframes-based-on-a-value-in-one-row-and-with-differen
