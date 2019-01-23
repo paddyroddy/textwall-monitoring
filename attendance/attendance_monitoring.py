@@ -52,6 +52,9 @@ class AttendanceMonitoring:
         # remove "
         df['string'] = df['string'].str.replace('"', '')
 
+        # remove double comma
+        df['string'] = df['string'].str.replace(',,', ',')
+
         # remove leading _
         df['string'] = df['string'].str.lstrip('_')
 
