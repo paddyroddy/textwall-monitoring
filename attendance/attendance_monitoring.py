@@ -116,18 +116,8 @@ class AttendanceMonitoring:
         columns = {i: col_names[i + 1] for i in range(len(col_names) - 1)}
         false_df.rename(index=str, columns=columns, inplace=True)
 
-        # make modules an int in new column
+        # make modules an int into a new column
         correct_df['int_module'] = pd.to_numeric(correct_df['module'], downcast='integer')
-
-        # put module codes equal to zero as failures
-        indices = correct_df['int_module'] == 0
-        zero_failures = correct_df[indices].copy()
-        # remove int_module column
-        zero_failures.drop('int_module', axis=1, inplace=True)
-        # add failures to false_df
-        false_df = pd.concat([false_df, zero_failures], sort=False)
-        # remove failures from correct_df
-        correct_df = correct_df[~indices]
 
         # read in csv_module - list of modules
         df_module = pd.read_csv(self.csv_module, dtype=int)
