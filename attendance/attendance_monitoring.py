@@ -218,13 +218,17 @@ class AttendanceMonitoring:
 
         # find all students not in df_student but in s
         all_csv_values = df_student.values.flatten()
-        student_array = all_csv_values[~pd.isna(all_csv_values)]
+        student_array = all_csv_values[~pd.isnull(all_csv_values)]
         df_contained = pd.DataFrame(student_array, columns=['student'])
-        df_missing = df_textwall_grouped[~df_textwall_grouped['student'].isin(
-            df_contained['student'])].dropna()
+
+        # only keep missing students
+        df_merged = df_contained.merge(df_textwall_grouped, how='outer', indicator=True)
+        df_missing = df_merged.query('_merge == "right_only"').copy()
+        df_missing.drop(['_merge'], axis=1, inplace=True)
+        missing_students = df_missing['student'].unique()
 
         # save missing students in table
-        self.year_group_table('missing_students', cols, s, df_missing)
+        self.year_group_table('missing_students', cols, s, missing_students)
 
     def year_group_table(self, heading, column_names, s, student_numbers):
         # num of rows in output
