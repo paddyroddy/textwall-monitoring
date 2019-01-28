@@ -85,7 +85,6 @@ class AttendanceMonitoring:
         df['string'] = df['string'].str.replace('phas|pha|phs|pgas|spce', '')
 
         # correct_format = df['string'].str.match(
-        #     r'\d{8}(\s*,\s*|\s+)(0\d{1,4}|[^0]\d{0,3})(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*]{3,5}')
         correct_format = df['string'].str.match(
             r'^\d{8}(\s*,\s*|\s+)\d+(\s*,\s*|\s+)[\w\d\$\!\+\@\-\*\&\'\/\,]{3,}\s*$')
         false_df = df[~correct_format].copy()
