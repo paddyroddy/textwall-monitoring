@@ -1,7 +1,9 @@
+from __future__ import print_function
 import os
 import pandas as pd
 import datetime as dt
 import numpy as np
+from argparse import ArgumentParser
 
 
 class AttendanceMonitoring:
@@ -10,6 +12,7 @@ class AttendanceMonitoring:
         self.csv_student = csv_student
         self.csv_module = csv_module
         self.starting_monday = starting_monday
+        self.output_folder = 'output'
         self.number_weeks = 52  # i.e. a year
         self.weeks = self.calculate_weeks()
         self.df_textwall = self.split_textwall_weeks()
@@ -119,18 +122,21 @@ class AttendanceMonitoring:
         false_df.rename(index=str, columns=columns, inplace=True)
 
         # make modules an int into a new column
-        correct_df['int_module'] = pd.to_numeric(correct_df['module'], downcast='integer')
+        correct_df['int_module'] = pd.to_numeric(
+            correct_df['module'], downcast='integer')
 
         # read in csv_module - list of modules
         df_module = pd.read_csv(self.csv_module, dtype=int)
 
         # only keep valid module codes
         cols_to_use = correct_df.columns.difference(df_module.columns)
-        df_merged = df_module.merge(correct_df, how='outer', left_on='module', right_on='int_module', indicator=True)
+        df_merged = df_module.merge(
+            correct_df, how='outer', left_on='module', right_on='int_module', indicator=True)
 
         # adjust names of columns
         df_merged.drop('module_x', axis=1, inplace=True)
-        df_merged.rename(index=str, columns={'module_y': 'module'}, inplace=True)
+        df_merged.rename(index=str, columns={
+                         'module_y': 'module'}, inplace=True)
 
         # add invalid module codes to false_df
         invalid_modules = df_merged.query('_merge == "right_only"').copy()
@@ -140,7 +146,8 @@ class AttendanceMonitoring:
         # remove invalid modules and reformat columns
         df_valid_modules = df_merged.query('_merge == "both"').copy()
         df_valid_modules.drop(['module', '_merge'], axis=1, inplace=True)
-        df_valid_modules.rename(index=str, columns={'int_module': 'module'}, inplace=True)
+        df_valid_modules.rename(
+            index=str, columns={'int_module': 'module'}, inplace=True)
 
         # find difference between first textwall and current
         difference = df_valid_modules['datetime'] - \
@@ -155,7 +162,8 @@ class AttendanceMonitoring:
             by=['module', 'phrase', 'datetime'], inplace=True)
 
         # save outputs and errors
-        self.save_csv(df_valid_modules, 'output', 'Full valid cleaned textwall output')
+        self.save_csv(df_valid_modules, 'output',
+                      'Full valid cleaned textwall output')
         self.save_csv(false_df, 'errors', 'Failed textwall entries')
 
         return df_valid_modules, false_df
@@ -221,7 +229,8 @@ class AttendanceMonitoring:
         df_contained = pd.DataFrame(student_array, columns=['student'])
 
         # only keep missing students
-        df_merged = df_contained.merge(df_textwall_grouped, how='outer', indicator=True)
+        df_merged = df_contained.merge(
+            df_textwall_grouped, how='outer', indicator=True)
         df_missing = df_merged.query('_merge == "right_only"').copy()
         df_missing.drop(['_merge'], axis=1, inplace=True)
         missing_students = df_missing['student'].unique()
@@ -299,8 +308,11 @@ class AttendanceMonitoring:
         filename_no_folder = os.path.basename(self.csv_textwall)
         filename_no_extension = os.path.splitext(filename_no_folder)[0]
         filename = filename_no_extension + '_' + ending + '.csv'
-        dataframe.to_csv(filename)
-        print(print_message + ': {0}'.format(filename))
+        __location__ = os.path.realpath(os.path.join(
+            os.getcwd(), os.path.dirname(__file__)))
+        path = os.path.join(__location__, self.output_folder, filename)
+        dataframe.to_csv(path)
+        print(print_message + ': {0}'.format(path))
 
 
 def process(csv_textwall, csv_student, csv_module, starting_monday):
@@ -310,8 +322,29 @@ def process(csv_textwall, csv_student, csv_module, starting_monday):
     am.create_module_table()
 
 
+def valid_date(s):
+    try:
+        date = dt.datetime.strptime(s, '%Y-%m-%d')
+        # test if Monday
+        if date.weekday() == 0:
+            return date
+        else:
+            raise ValueError('Date not a Monday')
+    except ValueError:
+        msg = "Not a valid date: '{0}'.".format(s)
+        raise argparse.ArgumentTypeError(msg)
+
+
 if __name__ == '__main__':
-    # process('textwall_sample.csv', 'student_numbers.csv',
-    #         'module_codes.csv', '2018-08-27')
-    process('textwall_2018-19_week1-20.csv', 'student_numbers.csv',
-            'module_codes.csv', '2018-08-27')
+    parser = ArgumentParser(description='Sort textwall output')
+    parser.add_argument('csv_textwall', metavar='csv_textwall',
+                        type=str, help='textwall output')
+    parser.add_argument('csv_student', metavar='csv_student',
+                        type=str, help='students by year group')
+    parser.add_argument('csv_module', metavar='csv_module',
+                        type=str, help='module codes')
+    parser.add_argument('starting_monday', metavar='starting_monday', type=valid_date, nargs='?',
+                        default='2018-08-27', help='starting monday of the year - format YYYY-MM-DD (defaults to 2018-08-27)')
+    args = parser.parse_args()
+    process(args.csv_textwall, args.csv_student,
+            args.csv_module, args.starting_monday)
