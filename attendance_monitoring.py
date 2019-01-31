@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 import os
 import pandas as pd
 import datetime as dt
@@ -155,7 +155,7 @@ class AttendanceMonitoring:
             'datetime'].transform('min')
 
         # create easy to read collumns of difference
-        df_valid_modules['delta_sec'] = difference.dt.seconds
+        df_valid_modules['delta_hour'] = difference.dt.seconds / 3600
 
         # sort by module/phrase/datetime
         df_valid_modules.sort_values(
@@ -193,11 +193,11 @@ class AttendanceMonitoring:
         df = self.df_textwall
 
         # create copy column with different name for grouping
-        df['delta_sec_copy'] = df['delta_sec']
+        df['delta_hour_copy'] = df['delta_hour']
 
         # calculate count and mean grouped by student number and week
-        df_textwall_grouped = df.groupby(['student', 'week']).agg({'delta_sec': 'size', 'delta_sec_copy': 'mean'}).rename(
-            columns={'delta_sec': 'count', 'delta_sec_copy': 'mean'}).reset_index()
+        df_textwall_grouped = df.groupby(['student', 'week']).agg({'delta_hour': 'size', 'delta_hour_copy': 'mean'}).rename(
+            columns={'delta_hour': 'count', 'delta_hour_copy': 'mean'}).reset_index()
 
         # populate df_output with values frpom df_textwall_year_group https://stackoverflow.com/questions/53961242/how-to-merge-two-pandas-dataframes-based-on-a-value-in-one-row-and-with-differen
         # pivot df2 to format it like df1
@@ -274,7 +274,7 @@ class AttendanceMonitoring:
 
         # calculate count and mean grouped by student number and week
         df_textwall_grouped = df.groupby(['module', 'week']).agg(
-            {'delta_sec': 'size'}).rename(columns={'delta_sec': 'count'}).reset_index()
+            {'delta_hour': 'size'}).rename(columns={'delta_hour': 'count'}).reset_index()
 
         # populate df_output with values frpom df_textwall_year_group https://stackoverflow.com/questions/53961242/how-to-merge-two-pandas-dataframes-based-on-a-value-in-one-row-and-with-differen
         # pivot df2 to format it like df1
