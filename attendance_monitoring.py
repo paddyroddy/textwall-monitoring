@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import datetime as dt
 import numpy as np
-from argparse import ArgumentParser
+import argparse
 
 
 class AttendanceMonitoring:
@@ -337,7 +337,7 @@ def valid_date(s):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(description='Sort textwall output')
+    parser = argparse.ArgumentParser(description='Sort textwall output')
     parser.add_argument('csv_textwall', metavar='csv_textwall',
                         type=str, help='textwall output')
     parser.add_argument('csv_student', metavar='csv_student',
