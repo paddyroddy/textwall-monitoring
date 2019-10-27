@@ -1,5 +1,6 @@
 *.csv
-.vscode/
-*.egg-info/
-dist/
-build/
+.vscode
+*.egg-info
+dist
+build
+.mypy_cache
