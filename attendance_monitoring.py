@@ -374,8 +374,8 @@ if __name__ == "__main__":
         metavar="starting_monday",
         type=valid_date,
         nargs="?",
-        default="2018-08-27",
-        help="starting monday of the year - format YYYY-MM-DD (defaults to 2018-08-27)",
+        default="2019-08-26",
+        help="starting monday of the year - format YYYY-MM-DD (defaults to 2019-08-26)",
     )
     args = parser.parse_args()
     process(args.csv_textwall, args.csv_student, args.csv_module, args.starting_monday)
